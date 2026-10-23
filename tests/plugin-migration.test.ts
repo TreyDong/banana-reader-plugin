@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {promises as fs} from 'node:fs';
 import {join} from 'node:path';
 import {tmpdir} from 'node:os';
-import {prepareLegacyMigration,applyLegacyMigration,migrateLegacyPluginData} from '../src/plugin-migration';
+import {prepareLegacyMigration,applyLegacyMigration,migrateLegacyPluginData} from '../src/legacy-migration-desktop';
 
 const indexName='a'.repeat(64)+'.json';
 const store={version:5,settings:{language:'en',services:[{id:'keep-service-id',name:'Custom API',kind:'api'}],taskModels:{default:{serviceId:'keep-service-id',modelId:'model'}},commands:[{id:'mine',name:'My command',prompt:'Do not rewrite'}],translationTarget:'ja',customFutureField:{keep:true}},documents:{'article.md':{progress:.42,draft:'Unsent draft',updated:42,highlights:[{id:'mark',style:'underline',note:'My note',color:'yellow',anchor:{start:1,quote:'source',prefix:'a',suffix:'b'},created:1}],threads:[{id:'question',followupDraft:'Follow up',messages:[{role:'assistant',content:'Answer [¶1]',model:'model',usage:{input:20}}],citations:{'1':{quote:'source',start:1}},created:2}],brief:{hash:'same',title:'Saved brief'}}}};

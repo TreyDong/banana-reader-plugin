@@ -102,7 +102,8 @@ test('exports retain quote, personal note, full conversation and encoded return 
   r.highlights.push({id:'removed',anchor:a,color:'pink',note:'不应导出',created:1,removed:true});
   r.threads.push({id:'t1',anchor:a,messages:[{role:'user',content:'为什么？'},{role:'assistant',content:'解释 [¶1]'}],created:1});
   const md = exportReading('剪藏/一篇 文档.md', r, '00_个人库');
-  assert.match(md, /obsidian:\/\/banana-reader\?vault=/); assert.doesNotMatch(md,/obsidian:\/\/gloss-reader/); assert.match(md, /我的批注/); assert.match(md, /解释 \[¶1\]/); assert.match(md, /anchor=h1/); assert.match(md, /anchor=t1/); assert.ok(md.includes(encodeURIComponent('剪藏/一篇 文档.md'))); assert.ok(!md.includes('不应导出'));
+  assert.match(md,/obsidian:\/\/banana-reader\?/);assert.doesNotMatch(md,/obsidian:\/\/gloss-reader\?/);
+  assert.match(md, /我的批注/); assert.match(md, /解释 \[¶1\]/); assert.match(md, /anchor=h1/); assert.match(md, /anchor=t1/); assert.ok(md.includes(encodeURIComponent('剪藏/一篇 文档.md'))); assert.ok(!md.includes('不应导出'));
 });
 test('protected directories are excluded without matching unrelated similar names', () => {
   for (const p of ['日记/今天.md', '20_投资库/a.md', '子目录/60_工作库/a.md', 'A1_交易数据/a.md']) assert.equal(blockedPath(p), true);

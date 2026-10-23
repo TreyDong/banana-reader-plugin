@@ -1,5 +1,4 @@
-import {unzipSync,strFromU8} from 'fflate';
-import {posix} from 'node:path';
+import {unzipSync,strFromU8} from 'fflate/browser';
 export type BookBlock={kind:'p'|'heading'|'pre'|'image';text:string;level?:number;image?:string};
 export interface BookSection {title:string;page?:number;blocks:BookBlock[]}
 export interface Book {kind:'pdf'|'epub';title:string;author?:string;sections:BookSection[];images:Record<string,{bytes:Uint8Array;mime:string}>;warnings:string[]}
@@ -12,7 +11,8 @@ export function bookPath(base:string,href:string):string|null{
  let local:string;try{local=decodeURIComponent(resource);}catch{return null;}
  if(/[\\\0]/.test(local)||local.startsWith('/')||/^[a-z][a-z\d+.-]*:/i.test(local))return null;
  const directory=base.substring(0,base.lastIndexOf('/')+1);
- const resolved=posix.normalize(directory+local).replace(/\/+$/,'');
+ const parts:string[]=[];for(const part of (directory+local).split('/')){if(!part||part==='.')continue;if(part==='..'){if(!parts.length)return null;parts.pop();}else parts.push(part);}
+ const resolved=parts.join('/');
  if(resolved==='..'||resolved.startsWith('../'))return null;
  return resolved==='.'?'':resolved;
 }
