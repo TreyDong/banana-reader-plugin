@@ -20,6 +20,23 @@ import {usageFromEvent,mergeTokenUsage} from '../src/agent';
 import {regenerationHistory,tokenReceipt,freshReading,exportReading,type TokenUsage}from'../src/core';
 import {notebookCounts,notebookEntries}from'../src/notebook';
 import * as http from'node:http';
+import {deviceAssignments,setupForDevice} from '../src/services';
+
+test('mobile assignments inherit API routes once and never overwrite desktop CLI or per-task routes',()=>{
+ const s=setup();s.services.push({...newService('codex','desktop'),models:[{id:'local',name:'Local'}]});s.taskModels.default={serviceId:'desktop',modelId:'local'};s.taskModels.summary={serviceId:'desktop',modelId:'local'};
+ const desktopBefore=structuredClone(s.taskModels),phone=deviceAssignments(s,true);assert.equal(phone.default,undefined);assert.equal(phone.summary,undefined);assert.deepEqual(phone.translate,s.taskModels.translate);assert.notEqual(phone.translate,s.taskModels.translate);
+ phone.default={serviceId:'two',modelId:'same'};phone.summary={serviceId:'one',modelId:'same'};assert.deepEqual(s.taskModels,desktopBefore);assert.equal(resolveModel(setupForDevice(s,true)).service.id,'two');assert.equal(resolveModel(setupForDevice(s,false)).service.id,'desktop');
+ delete phone.translate;assert.equal(s.taskModels.translate?.serviceId,'two');assert.equal(deviceAssignments(s,true).translate,undefined);assert.equal(deviceAssignments(s,false),s.taskModels);
+ const reopened=migrateSetup({...base,...JSON.parse(JSON.stringify(s))});assert.deepEqual(reopened.mobileTaskModels,phone);assert.deepEqual(reopened.taskModels,desktopBefore);
+});
+test('mobile API defaults are copied independently and invalid mobile CLI routes cannot resolve',()=>{
+ const s=setup(),phone=deviceAssignments(s,true);assert.deepEqual(phone,s.taskModels);phone.default!.modelId='changed';assert.equal(s.taskModels.default?.modelId,'same');
+ s.services.push({...newService('claude','cli'),models:[{id:'sonnet',name:'Sonnet'}]});phone.default={serviceId:'cli',modelId:'sonnet'};assert.throws(()=>resolveModel(setupForDevice(s,true)),/移除/);pruneAssignments(s);assert.equal(phone.default,undefined);assert.equal(s.taskModels.default?.serviceId,'one');
+});
+test('removing a service, model, or changing its type cleans both assignment maps without choosing replacements',()=>{
+ const s=setup(),phone=deviceAssignments(s,true);phone.default={serviceId:'two',modelId:'same'};s.services.splice(1,1);pruneAssignments(s);assert.equal(phone.default,undefined);assert.equal(s.taskModels.translate,undefined);assert.equal(s.taskModels.default?.serviceId,'one');
+ phone.default={serviceId:'one',modelId:'same'};setModelType(s,s.services[0],s.services[0].models[0],'embedding');assert.equal(phone.default,undefined);assert.equal(s.taskModels.default,undefined);
+});
 test('reported usage normalizes seven transports without double counting cache or partial deltas',()=>{
  assert.deepEqual(usageFromEvent('codex',{type:'turn.completed',usage:{input_tokens:100,cached_input_tokens:40,output_tokens:10}}),{input:100,output:10,cacheRead:40,total:110});
  const start=usageFromEvent('anthropic',{type:'message_start',message:{usage:{input_tokens:42,cache_read_input_tokens:30,cache_creation_input_tokens:5,output_tokens:1}}})!;

@@ -1,8 +1,4 @@
-import * as http from 'node:http';
-import * as https from 'node:https';
-import {createHash,randomUUID} from 'node:crypto';
-import {promises as fs} from 'node:fs';
-import {join} from 'node:path';
+import {desktopModule,hasMobileTransport,mobileRequest} from './agent';
 import {makeAnchor,blockedPath,referenceTokens,type Anchor,type Thread} from './core';
 
 export interface EmbeddingSettings {base:string;model:string;dimensions:number;topK:number}
@@ -12,7 +8,22 @@ export interface BookChunk {id:string;text:string;label:string;anchor:Anchor;vec
 export interface BookStamp {path:string;mtime:number;size:number}
 export interface BookIndex {version:1;stamp:BookStamp;identity:string;created:number;model:string;dimensions:number;chunks:BookChunk[];skippedPages:number;inputTokens?:number}
 export interface ContextInfo {label:string;embeddingModel?:string;inputTokens?:number;sources:{id:string;label:string}[]}
-export const hash=(value:string)=>createHash('sha256').update(value).digest('hex');
+/** SHA-256 keeps existing cache filenames and identities without Node crypto. */
+export function hash(value:string):string{
+ const bytes=new TextEncoder().encode(value),length=Math.ceil((bytes.length+9)/64)*64,data=new Uint8Array(length);data.set(bytes);data[bytes.length]=128;
+ const view=new DataView(data.buffer),bits=bytes.length*8;view.setUint32(length-8,Math.floor(bits/0x100000000));view.setUint32(length-4,bits>>>0);
+ const h=[0x6a09e667,0xbb67ae85,0x3c6ef372,0xa54ff53a,0x510e527f,0x9b05688c,0x1f83d9ab,0x5be0cd19];
+ const k=[0x428a2f98,0x71374491,0xb5c0fbcf,0xe9b5dba5,0x3956c25b,0x59f111f1,0x923f82a4,0xab1c5ed5,0xd807aa98,0x12835b01,0x243185be,0x550c7dc3,0x72be5d74,0x80deb1fe,0x9bdc06a7,0xc19bf174,0xe49b69c1,0xefbe4786,0x0fc19dc6,0x240ca1cc,0x2de92c6f,0x4a7484aa,0x5cb0a9dc,0x76f988da,0x983e5152,0xa831c66d,0xb00327c8,0xbf597fc7,0xc6e00bf3,0xd5a79147,0x06ca6351,0x14292967,0x27b70a85,0x2e1b2138,0x4d2c6dfc,0x53380d13,0x650a7354,0x766a0abb,0x81c2c92e,0x92722c85,0xa2bfe8a1,0xa81a664b,0xc24b8b70,0xc76c51a3,0xd192e819,0xd6990624,0xf40e3585,0x106aa070,0x19a4c116,0x1e376c08,0x2748774c,0x34b0bcb5,0x391c0cb3,0x4ed8aa4a,0x5b9cca4f,0x682e6ff3,0x748f82ee,0x78a5636f,0x84c87814,0x8cc70208,0x90befffa,0xa4506ceb,0xbef9a3f7,0xc67178f2];
+ const rotate=(n:number,b:number)=>(n>>>b)|(n<<(32-b)),w=new Uint32Array(64);
+ for(let offset=0;offset<length;offset+=64){
+  for(let i=0;i<16;i++)w[i]=view.getUint32(offset+i*4);
+  for(let i=16;i<64;i++){const a=w[i-15],b=w[i-2];w[i]=(w[i-16]+(rotate(a,7)^rotate(a,18)^(a>>>3))+w[i-7]+(rotate(b,17)^rotate(b,19)^(b>>>10)))>>>0;}
+  let [a,b,c,d,e,f,g,z]=h;
+  for(let i=0;i<64;i++){const t1=(z+(rotate(e,6)^rotate(e,11)^rotate(e,25))+((e&f)^(~e&g))+k[i]+w[i])>>>0,t2=((rotate(a,2)^rotate(a,13)^rotate(a,22))+((a&b)^(a&c)^(b&c)))>>>0;z=g;g=f;f=e;e=(d+t1)>>>0;d=c;c=b;b=a;a=(t1+t2)>>>0;}
+  [a,b,c,d,e,f,g,z].forEach((n,i)=>h[i]=(h[i]+n)>>>0);
+ }
+ return h.map(n=>n.toString(16).padStart(8,'0')).join('');
+}
 export function embeddingEndpoint(base:string){let url:URL;try{url=new URL(base.trim().replace(/\/+$/,'')+'/embeddings');}catch{throw new Error('Embedding API 地址无效。');}if(url.username||url.password||url.search||url.hash||!['http:','https:'].includes(url.protocol)||url.protocol==='http:'&&!['localhost','127.0.0.1','[::1]'].includes(url.hostname))throw new Error('Embedding 地址须使用 HTTPS；本机服务可使用 HTTP。');return url;}
 export function embeddingIdentity(s:EmbeddingSettings){return hash(JSON.stringify([embeddingEndpoint(s.base).href,s.model.trim(),s.dimensions||0]));}
 export function normalizeEmbedding(s:Partial<EmbeddingSettings>|undefined):EmbeddingSettings{return{base:typeof s?.base==='string'?s.base:EMBEDDING_DEFAULTS.base,model:typeof s?.model==='string'?s.model:'',dimensions:Number.isInteger(s?.dimensions)&&s!.dimensions!>=0&&s!.dimensions!<=8192?s!.dimensions!:0,topK:Number.isInteger(s?.topK)&&s!.topK!>=2&&s!.topK!<=12?s!.topK!:6};}
@@ -21,6 +32,15 @@ export function unitVector(value:unknown,dimensions?:number):number[]{if(!Array.
 export async function embedTexts(settings:EmbeddingSettings,key:string,input:string[],signal:AbortSignal):Promise<{vectors:number[][];inputTokens?:number}>{
  check(signal);const model=settings.model.trim();if(!model||model.length>200||/[\r\n]/.test(model))throw new Error('请先配置 Embedding 模型。');if(!input.length||input.length>32||input.some(t=>!t.trim()||t.length>4000))throw new Error('Embedding 输入超过单批限制。');
  const url=embeddingEndpoint(settings.base),body={model,input,encoding_format:'float',...(settings.dimensions?{dimensions:settings.dimensions}:{})};
+ if(hasMobileTransport()){
+  const raw=await mobileRequest({url:url.href,method:'POST',headers:{'Content-Type':'application/json',Accept:'application/json',...(key?{Authorization:'Bearer '+key}:{})},body:JSON.stringify(body)},signal);
+  try{
+   const value=JSON.parse(raw);if(!Array.isArray(value.data)||value.data.length!==input.length)throw new Error();
+   const vectors:number[][]=new Array(input.length);for(const item of value.data){if(!Number.isInteger(item.index)||item.index<0||item.index>=input.length||vectors[item.index])throw new Error();vectors[item.index]=unitVector(item.embedding,settings.dimensions||vectors.find(Boolean)?.length);}
+   if(vectors.filter(Boolean).length!==input.length)throw new Error();const reported=value.usage?.prompt_tokens;return{vectors,inputTokens:Number.isInteger(reported)&&reported>=0?reported:undefined};
+  }catch{throw new Error('Embedding 返回格式或向量维度无效，请检查兼容接口。');}
+ }
+ const https=desktopModule('node:https') as typeof import('node:https'),http=desktopModule('node:http') as typeof import('node:http');
  return new Promise((resolve,reject)=>{let done=false,data='';const finish=(err?:Error,result?:{vectors:number[][];inputTokens?:number})=>{if(done)return;done=true;clearTimeout(timer);signal.removeEventListener('abort',abort);if(err){req.destroy();reject(err);}else resolve(result!);};const abort=()=>finish(new Error('已停止'));const req=(url.protocol==='https:'?https:http).request(url,{method:'POST',headers:{'Content-Type':'application/json',Accept:'application/json',...(key?{Authorization:'Bearer '+key}:{})}},res=>{
   if(res.statusCode!==200){res.resume();finish(new Error('Embedding 服务返回 HTTP '+res.statusCode+'，请检查地址、模型和额度。'));return;}res.setEncoding('utf8');res.on('data',chunk=>{data+=chunk;if(data.length>16000000)finish(new Error('Embedding 返回数据过大。'));});res.on('error',()=>finish(new Error('Embedding 连接中断。')));res.on('aborted',()=>finish(new Error('Embedding 连接中断。')));res.on('end',()=>{if(done)return;try{const value=JSON.parse(data);if(!Array.isArray(value.data)||value.data.length!==input.length)throw new Error();const vectors:number[][]=new Array(input.length);for(const item of value.data){if(!Number.isInteger(item.index)||item.index<0||item.index>=input.length||vectors[item.index])throw new Error();vectors[item.index]=unitVector(item.embedding,settings.dimensions||vectors.find(Boolean)?.length);}if(vectors.some(v=>!v))throw new Error();const reported=value.usage?.prompt_tokens;finish(undefined,{vectors,inputTokens:Number.isInteger(reported)&&reported>=0?reported:undefined});}catch{finish(new Error('Embedding 返回格式或向量维度无效，请检查兼容接口。'));}});
  });const timer=setTimeout(()=>finish(new Error('Embedding 请求超时。')),60000);req.on('error',()=>finish(new Error('无法连接 Embedding 服务，请检查配置。')));signal.addEventListener('abort',abort,{once:true});if(signal.aborted){abort();return;}req.end(JSON.stringify(body));});
@@ -54,12 +74,44 @@ export function retainPriorEvidence(bundle:ReturnType<typeof retrievalContext>,t
  const heading='\n先前回答引用过的原文（原编号仍有效）：\n';let added=false;for(const id of used){if(citations[id])continue;const a=thread.citations?.[id];if(!a)continue;const label=a.pdfPage?'PDF 第 '+a.pdfPage+' 页':thread.contextInfo?.sources.find(s=>s.id===id)?.label||'原文片段',part=`[¶${id}] （${label}）${a.quote}\n\n`;if(context.length+part.length+heading.length+120>budget)continue;if(!added){context+=heading;added=true;}context+=part;citations[id]={...a};sources.push({id,label:'历史 · '+label});}
  context+='\n历史回答可能引用本轮未附带的旧片段，不能仅因此判定旧引用错误。本轮依据不足时说明需要补充原文。';return{context,citations,sources};
 }
+export interface IndexStorage {
+ exists(path:string):Promise<boolean>;
+ stat(path:string):Promise<{size:number}|null>;
+ read(path:string):Promise<string>;
+ write(path:string,data:string):Promise<unknown>;
+ mkdir(path:string):Promise<unknown>;
+ rename(from:string,to:string):Promise<unknown>;
+ remove(path:string):Promise<unknown>;
+}
+/** The plugin injects Vault.adapter; the Node fallback is only for standalone desktop callers. */
+function nodeIndexStorage():IndexStorage{
+ const fs=desktopModule('node:fs').promises as typeof import('node:fs').promises;
+ return{exists:async path=>{try{await fs.stat(path);return true;}catch(error:any){if(error?.code==='ENOENT')return false;throw error;}},stat:path=>fs.stat(path),read:path=>fs.readFile(path,'utf8'),write:(path,data)=>fs.writeFile(path,data,{mode:0o600}),mkdir:path=>fs.mkdir(path,{recursive:true}),rename:(from,to)=>fs.rename(from,to),remove:path=>fs.rm(path,{force:true})};
+}
 export class BookIndexCache {
- constructor(readonly dir:string){}
- private file(path:string){return join(this.dir,hash(path)+'.json');}
- async load(path:string):Promise<BookIndex|null>{try{const file=this.file(path),stat=await fs.stat(file);if(stat.size>120_000_000)throw new Error();const index=JSON.parse(await fs.readFile(file,'utf8')) as BookIndex;if(index.version!==1||index.stamp.path!==path||!Array.isArray(index.chunks)||index.chunks.length>8000||!Number.isInteger(index.dimensions)||index.dimensions<1||index.dimensions>8192)throw new Error();for(const c of index.chunks){if(typeof c.text!=='string'||c.text.length>4000||!c.anchor||typeof c.anchor.quote!=='string')throw new Error();c.vector=unitVector(c.vector,index.dimensions);}return index;}catch(e:any){if(e?.code==='ENOENT')return null;throw new Error('本书索引损坏或不可读，请重新建立索引。');}}
- async save(index:BookIndex){await fs.mkdir(this.dir,{recursive:true});const tmp=this.file(index.stamp.path)+'.'+randomUUID()+'.tmp';try{await fs.writeFile(tmp,JSON.stringify(index),{mode:0o600});await fs.rename(tmp,this.file(index.stamp.path));}finally{await fs.rm(tmp,{force:true});}}
- async remove(path:string){await fs.rm(this.file(path),{force:true});}
+ private storage:IndexStorage;
+ private queue:Promise<unknown>=Promise.resolve();
+ constructor(readonly dir:string,storage?:IndexStorage){this.storage=storage||nodeIndexStorage();}
+ private file(path:string){return this.dir.replace(/\/$/,'')+'/'+hash(path)+'.json';}
+ private serial<T>(action:()=>Promise<T>):Promise<T>{const next=this.queue.catch(()=>{}).then(action);this.queue=next;return next;}
+ load(path:string):Promise<BookIndex|null>{return this.serial(()=>this.readIndex(path));}
+ private async readIndex(path:string):Promise<BookIndex|null>{try{const file=this.file(path),backup=file+'.bak';
+  // Recover an interrupted mobile rename before reading the cache.
+  if(!await this.storage.exists(file)){if(await this.storage.exists(backup))await this.storage.rename(backup,file);else return null;}
+  const stat=await this.storage.stat(file);if(!stat||stat.size>120_000_000)throw new Error();
+  const index=JSON.parse(await this.storage.read(file)) as BookIndex;if(index.version!==1||index.stamp.path!==path||!Array.isArray(index.chunks)||index.chunks.length>8000||!Number.isInteger(index.dimensions)||index.dimensions<1||index.dimensions>8192)throw new Error();for(const c of index.chunks){if(typeof c.text!=='string'||c.text.length>4000||!c.anchor||typeof c.anchor.quote!=='string')throw new Error();c.vector=unitVector(c.vector,index.dimensions);}return index;
+ }catch{throw new Error('本书索引损坏或不可读，请重新建立索引。');}}
+ save(index:BookIndex){return this.serial(async()=>{
+  if(!await this.storage.exists(this.dir))await this.storage.mkdir(this.dir);const file=this.file(index.stamp.path),tmp=file+'.'+Date.now().toString(36)+Math.random().toString(36).slice(2)+'.tmp',backup=file+'.bak';let moved=false;
+  try{
+   await this.storage.write(tmp,JSON.stringify(index));
+   if(await this.storage.exists(file)){if(await this.storage.exists(backup))await this.storage.remove(backup);await this.storage.rename(file,backup);moved=true;}
+   await this.storage.rename(tmp,file);
+  }catch(error){if(moved&&!await this.storage.exists(file))await this.storage.rename(backup,file);throw error;}
+  finally{if(await this.storage.exists(tmp))await this.storage.remove(tmp);}
+  if(await this.storage.exists(backup))await this.storage.remove(backup);
+ });}
+ remove(path:string){return this.serial(async()=>{const file=this.file(path);for(const target of [file,file+'.bak'])if(await this.storage.exists(target))await this.storage.remove(target);});}
 }
 
 /** Bounded whole-document evidence without embeddings. Display remains the original PDF. */

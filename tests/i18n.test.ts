@@ -70,7 +70,7 @@ async function loadPlugin(saved:unknown,host='zh',identity?:{root:string;id:stri
   removeCommand(id:string){commands.delete(id);}
  }
  const nativeRequire=createRequire(import.meta.url);
- const stub={TFile:class{constructor(public path:string){}},Plugin,ItemView:class{},FileView:class{},FuzzySuggestModal:class{},Modal:class{},PluginSettingTab:class{},getLanguage:()=>host};
+ const stub={Notice:class{},TFile:class{constructor(public path:string){}},Plugin,ItemView:class{},FileView:class{},FuzzySuggestModal:class{},Modal:class{},PluginSettingTab:class{},getLanguage:()=>host};
  const context={module:{exports:{}},exports:{},crypto:globalThis.crypto,console,URL,AbortController,setTimeout,clearTimeout,require:(id:string)=>{
   if(id==='obsidian')return stub;
   if(['node:child_process','node:http','node:https'].includes(id))return new Proxy({}, {get:()=>()=>{modelCalls++;throw new Error('Language changes must not call a model service');}});
@@ -87,7 +87,7 @@ test('real plugin language setting persists and changes commands without rewriti
  await run.plugin.changeLanguage('en');
  assert.equal(run.plugin.store.settings.language,'en');assert.equal(run.commands.get('open-reader')?.name,'Enter immersive reading');
  const after=structuredClone(run.plugin.store);after.settings.language=before.settings.language;
- assert.deepEqual(after,before);assert.equal(run.writes.at(-1).settings.language,'en');assert.equal(run.modelCalls(),0);assert.equal(run.commands.size,4);
+ assert.deepEqual(after,before);assert.equal(run.writes.at(-1).settings.language,'en');assert.equal(run.modelCalls(),0);assert.equal(run.commands.size,6);
  const reopened=await loadPlugin(run.writes.at(-1),'zh');assert.equal(reopened.plugin.store.settings.language,'en');assert.equal(reopened.commands.get('open-reader')?.name,'Enter immersive reading');
  await run.plugin.changeLanguage('zh-CN');assert.equal(run.commands.get('open-reader')?.name,'进入沉浸阅读');
 });
@@ -172,7 +172,7 @@ test('compiled new-ID plugin imports old data before loading settings and regist
   await mkdir(join(plugins,'gloss-reader'),{recursive:true});await mkdir(join(plugins,'banana-reader'));await writeFile(join(plugins,'gloss-reader/data.json'),bytes);await writeFile(join(plugins,'banana-reader/manifest.json'),JSON.stringify({id:'banana-reader'}));
   const run=await loadPlugin(undefined,'zh',{root,id:'banana-reader',legacyActive:false,events});
   assert.equal(events[0],'load');assert.equal(await readFile(join(plugins,'banana-reader/data.json'),'utf8'),bytes);assert.equal(await readFile(join(plugins,'gloss-reader/data.json'),'utf8'),bytes);
-  assert.deepEqual(structuredClone(run.plugin.store.documents),saved.documents);assert.equal(run.plugin.store.settings.taskModels.default.serviceId,'local');assert.equal(run.plugin.store.settings.translationTarget,'ja');assert.equal(run.plugin.store.settings.commands[0].name,'自定解释');assert.equal(run.modelCalls(),0);assert.equal(run.commands.size,4);
+  assert.deepEqual(structuredClone(run.plugin.store.documents),saved.documents);assert.equal(run.plugin.store.settings.taskModels.default.serviceId,'local');assert.equal(run.plugin.store.settings.translationTarget,'ja');assert.equal(run.plugin.store.settings.commands[0].name,'自定解释');assert.equal(run.modelCalls(),0);assert.equal(run.commands.size,6);
  }finally{await rm(root,{recursive:true,force:true});}
 });
 test('compiled new-ID plugin stops before loadData or saveData if the old plugin is still enabled',async()=>{

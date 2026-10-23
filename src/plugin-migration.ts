@@ -1,114 +1,46 @@
-import {promises as fs} from 'node:fs';
-import {Buffer} from 'node:buffer';
-import {createHash,randomUUID} from 'node:crypto';
-import {dirname,isAbsolute,join,relative,resolve,sep} from 'node:path';
+import type {DataAdapter} from 'obsidian';
 
 export const LEGACY_PLUGIN_ID='gloss-reader';
 export const TARGET_PLUGIN_ID='banana-reader';
-const RECEIPT='legacy-migration.json';
-const MAX_FILE=120_000_000;
-const MAX_TOTAL=512_000_000;
-const digest=(bytes:Uint8Array)=>createHash('sha256').update(bytes).digest('hex');
+interface IdentityOptions {pluginId:string;mobile:boolean;configDir:string;adapter:DataAdapter;legacyActive?:boolean}
 const record=(value:unknown):value is Record<string,unknown>=>!!value&&typeof value==='object'&&!Array.isArray(value);
-const missing=(error:unknown)=>record(error)&&error.code==='ENOENT';
-
-interface MigrationOptions {vaultRoot:string;configDir:string;pluginId:string;legacyActive?:boolean}
-interface CopyFile {name:string;bytes:Buffer;sha256:string}
-export interface MigrationPlan {source:string;target:string;files:CopyFile[]}
-export type MigrationResult={status:'not-applicable'|'no-legacy-data'|'already-migrated'|'migrated';files:number};
-
-async function exists(path:string){try{await fs.lstat(path);return true;}catch(error){if(missing(error))return false;throw error;}}
-async function noSymlinks(root:string,path:string){
- if((await fs.lstat(root)).isSymbolicLink())throw new Error('Migration refuses symbolic links.');
- const tail=relative(root,path);if(isAbsolute(tail)||tail==='..'||tail.startsWith('..'+sep))throw new Error('Migration path escapes the vault.');
- let current=root;
- for(const part of tail.split(sep).filter(Boolean)){
-  current=join(current,part);
-  try{if((await fs.lstat(current)).isSymbolicLink())throw new Error('Migration refuses symbolic links.');}catch(error){if(missing(error))return;throw error;}
- }
-}
-function validateStore(bytes:Buffer){
- const value:unknown=JSON.parse(bytes.toString('utf8'));
+function validateStore(value:unknown){
  if(!record(value)||!record(value.settings)||!record(value.documents)||typeof value.version!=='number'||value.version<1||value.version>5)throw new Error('Legacy Reader data is invalid or uses an unsupported format.');
- return value;
 }
-async function readCopy(root:string,name:string):Promise<CopyFile>{
- const path=join(root,name);await noSymlinks(root,path);const stat=await fs.stat(path);
- if(!stat.isFile()||stat.size>MAX_FILE)throw new Error('Migration source is not a supported regular file.');
- const bytes=await fs.readFile(path);return{name,bytes,sha256:digest(bytes)};
-}
-async function sourceFiles(source:string){
- const files=[await readCopy(source,'data.json')];validateStore(files[0].bytes);
- let total=files[0].bytes.length;
- if(await exists(join(source,'indices'))){
-  await noSymlinks(source,join(source,'indices'));
-  const names=(await fs.readdir(join(source,'indices'))).sort();
-  if(names.length>10_000)throw new Error('Too many legacy index files to migrate automatically.');
-  for(const name of names){
-   if(!/^[a-f0-9]{64}\.json$/.test(name))throw new Error('Legacy indices contain an unexpected file; review them before migrating.');
-   const file=await readCopy(source,join('indices',name));total+=file.bytes.length;
-   if(total>MAX_TOTAL)throw new Error('Legacy data is too large to migrate automatically.');files.push(file);
-  }
+
+/** Run before loadData/saveData. Mobile never writes across plugin identities. */
+export async function preparePluginIdentity(options:IdentityOptions){
+ if(options.pluginId!==TARGET_PLUGIN_ID)return;
+ if(!options.mobile){
+  // Keep the published desktop migration's exclusive writes and symlink checks.
+  const desktop=await import('./legacy-migration-desktop');
+  const adapter=options.adapter as DataAdapter&{getBasePath():string};
+  await desktop.migrateLegacyPluginData({vaultRoot:adapter.getBasePath(),configDir:options.configDir,pluginId:options.pluginId,legacyActive:options.legacyActive});return;
  }
- return files;
-}
-const inventory=(files:CopyFile[])=>Object.fromEntries(files.map(file=>[file.name,file.sha256]));
-async function unchanged(plan:MigrationPlan){
- const current=await sourceFiles(plan.source);
- if(JSON.stringify(inventory(current))!==JSON.stringify(inventory(plan.files)))throw new Error('Legacy data changed during migration; no data was replaced.');
-}
-async function emptyDestination(target:string){
- for(const name of ['data.json','indices',RECEIPT])if(await exists(join(target,name)))throw new Error('Reader data already exists at the destination; automatic migration will not overwrite or merge it.');
-}
-
-/** Read-only preparation. No vault enumeration, credential access or network calls. */
-export async function prepareLegacyMigration(options:MigrationOptions):Promise<MigrationPlan|MigrationResult>{
- if(options.pluginId!==TARGET_PLUGIN_ID)return{status:'not-applicable',files:0};
- if(options.legacyActive!==false)throw new Error('Disable the legacy Reader before migration. Its inactive state must be confirmed.');
- const root=await fs.realpath(options.vaultRoot),plugins=resolve(root,options.configDir,'plugins');await noSymlinks(root,plugins);
- const source=join(plugins,LEGACY_PLUGIN_ID),target=join(plugins,TARGET_PLUGIN_ID);
- await noSymlinks(root,source);await noSymlinks(root,target);
- if(!await exists(join(source,'data.json')))return{status:'no-legacy-data',files:0};
- await noSymlinks(root,join(target,'manifest.json'));
- const manifest:unknown=JSON.parse(await fs.readFile(join(target,'manifest.json'),'utf8'));
- if(!record(manifest)||manifest.id!==TARGET_PLUGIN_ID)throw new Error('Install the new Reader before importing legacy data.');
- const files=await sourceFiles(source);
- if(await exists(join(target,RECEIPT))){
-  await noSymlinks(root,join(target,RECEIPT));await noSymlinks(root,join(target,'data.json'));
-  const receipt:unknown=JSON.parse(await fs.readFile(join(target,RECEIPT),'utf8'));
-  if(!record(receipt)||receipt.version!==1||receipt.from!==LEGACY_PLUGIN_ID||receipt.to!==TARGET_PLUGIN_ID||JSON.stringify(receipt.sourceFiles)!==JSON.stringify(inventory(files)))throw new Error('The migration receipt does not match the legacy data; manual reconciliation is required.');
-  validateStore(await fs.readFile(join(target,'data.json')));
-  return{status:'already-migrated',files:0};
+ const plugins=options.configDir+'/plugins/',source=plugins+LEGACY_PLUGIN_ID,target=plugins+TARGET_PLUGIN_ID;
+ if(!await options.adapter.exists(source+'/data.json'))return;
+ if(options.legacyActive!==false)throw new Error('请先停用旧版 Reader，再启用 Banana Reader。旧记录尚未改动。');
+ // DataAdapter cannot publish files exclusively. Do the initial copy on desktop;
+ // on phones only verify the published receipt and leave both copies untouched.
+ if(!await options.adapter.exists(target+'/legacy-migration.json'))throw new Error('检测到旧版 Reader 记录。请先在电脑完成旧版到 Banana Reader 的迁移，再同步到手机；不要删除旧插件数据。');
+ const receipt:unknown=JSON.parse(await options.adapter.read(target+'/legacy-migration.json'));
+ if(!record(receipt)||receipt.version!==1||receipt.from!==LEGACY_PLUGIN_ID||receipt.to!==TARGET_PLUGIN_ID||!record(receipt.sourceFiles))throw new Error('Reader 迁移凭据无效，请保留两份记录并在电脑检查。');
+ const names=['data.json'];
+ if(await options.adapter.exists(source+'/indices')){
+  const listed=await options.adapter.list(source+'/indices');
+  const prefix=source+'/indices/';
+  if(listed.folders.length||listed.files.length>10_000||listed.files.some(path=>!path.startsWith(prefix)||!/^[a-f0-9]{64}\.json$/.test(path.slice(prefix.length))))throw new Error('旧版索引包含未识别的文件，请先在电脑检查。');
+  names.push(...listed.files.map(path=>path.slice(source.length+1)).sort());
  }
- await emptyDestination(target);return{source,target,files};
-}
-
-/** Copy only. Exclusive hard links prevent replacing concurrent destination data. */
-export async function applyLegacyMigration(plan:MigrationPlan):Promise<MigrationResult>{
- await noSymlinks(dirname(plan.source),plan.source);await noSymlinks(dirname(plan.target),plan.target);
- await emptyDestination(plan.target);await unchanged(plan);
- const stage=join(plan.target,'.legacy-migration-'+randomUUID()),created:CopyFile[]=[];let indexDir=false;
- await fs.mkdir(stage);
- try{
-  const receipt:CopyFile={name:RECEIPT,bytes:Buffer.from(JSON.stringify({version:1,from:LEGACY_PLUGIN_ID,to:TARGET_PLUGIN_ID,sourceFiles:inventory(plan.files)},null,2)+'\n'),sha256:''};receipt.sha256=digest(receipt.bytes);
-  for(const file of [...plan.files,receipt]){const path=join(stage,file.name);await fs.mkdir(dirname(path),{recursive:true});await fs.writeFile(path,file.bytes,{flag:'wx',mode:0o600});if(digest(await fs.readFile(path))!==file.sha256)throw new Error('Staged migration data failed verification.');}
-  await unchanged(plan);await emptyDestination(plan.target);
-  if(plan.files.some(file=>file.name.startsWith('indices'+sep))){await fs.mkdir(join(plan.target,'indices'));indexDir=true;}
-  for(const file of [...plan.files.filter(file=>file.name!=='data.json'),plan.files[0]]){await fs.link(join(stage,file.name),join(plan.target,file.name));created.push(file);}
-  await unchanged(plan);
-  await fs.link(join(stage,RECEIPT),join(plan.target,RECEIPT));created.push(receipt);
-  return{status:'migrated',files:plan.files.length};
- }catch(error){
-  for(const file of created.reverse()){
-   const path=join(plan.target,file.name);
-   // Never remove a file subsequently changed by another process.
-   if(await exists(path)&&digest(await fs.readFile(path))===file.sha256)await fs.unlink(path);
-  }
-  if(indexDir)try{await fs.rmdir(join(plan.target,'indices'));}catch{/* Preserve concurrent files. */}
-  throw error;
- }finally{await fs.rm(stage,{recursive:true,force:true});}
-}
-
-export async function migrateLegacyPluginData(options:MigrationOptions):Promise<MigrationResult>{
- const plan=await prepareLegacyMigration(options);return 'status' in plan?plan:applyLegacyMigration(plan);
+ const inventory:Record<string,string>={};let total=0;
+ for(const name of names){
+  const path=source+'/'+name,stat=await options.adapter.stat(path);
+  if(!stat||stat.type!=='file'||stat.size>120_000_000||(total+=stat.size)>512_000_000)throw new Error('旧版记录过大或格式异常，请先在电脑检查。');
+  const bytes=await options.adapter.readBinary(path);
+  inventory[name]=Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',bytes)),n=>n.toString(16).padStart(2,'0')).join('');
+  if(name==='data.json')validateStore(JSON.parse(new TextDecoder().decode(bytes)));
+ }
+ const previous=receipt.sourceFiles;
+ if(Object.keys(previous).length!==names.length||names.some(name=>(previous[name]??previous[name.replaceAll('/','\\')])!==inventory[name]))throw new Error('旧版 Reader 记录在迁移后有变化，请保留两份记录并在电脑核对。');
+ validateStore(JSON.parse(await options.adapter.read(target+'/data.json')));
 }

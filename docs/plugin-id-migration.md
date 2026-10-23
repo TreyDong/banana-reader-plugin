@@ -13,6 +13,8 @@ The account editor has no ID field. The [official sample](https://github.com/obs
 
 ## Existing installation
 
+For the 0.14.0 mobile candidate, complete the initial legacy migration on desktop. Mobile never copies across plugin identities: Obsidian DataAdapter does not provide exclusive file creation. With old data present, the phone requires the desktop migration receipt, verifies legacy hashes (including Windows receipt paths), and validates the destination store before loading it. Changed legacy data, an active/unknown old plugin, or a missing/invalid receipt stops loading before settings reads or writes. Fresh installations and existing `banana-reader` installations without legacy data load normally.
+
 Back up the old plugin folder first. Disable `gloss-reader` before enabling `banana-reader`; do not uninstall the old plugin first, because uninstalling may remove its stored data. Install the matching new release files into `<vault>/.obsidian/plugins/banana-reader/`, using the actual configuration directory if it differs from `.obsidian`.
 
 On first load, the guarded migration runs before `loadData()` or any settings persistence. It copies the old `data.json` and recognized `indices/` files without rewriting their fields, preserving settings, model/service references, prompts, document keys, highlights, annotations, conversations, citations and reading progress. Normal pre-existing store-version migrations still apply during loading. New installations without old data use the normal defaults.
