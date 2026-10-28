@@ -1,4 +1,12 @@
-# Banana Reader
+# Banana Reader（历史仓库，已归档）
+
+> **2026-10-28：本仓库归档。** 后续开发与正式发行统一到 [TreyDong/banana-reader](https://github.com/TreyDong/banana-reader)。当前桌面正式版为 [0.14.8](https://github.com/TreyDong/banana-reader/releases/tag/0.14.8)，社区插件 ID 为 `gloss-reader`。
+>
+> 本仓库及 `banana-reader` ID 的旧版仅作历史保留，旧手机／BRAT 测试通道停止维护，未获得 0.14.8 的审核和 PDF 修复。历史 0.14.1、0.14.2 标签仍指向 0.13.3 源码，与上传的安装包不一致；本次不改写标签或发行文件。
+>
+> 已安装 `banana-reader` 的用户请保留现有数据，切换前阅读正式仓库的[身份与数据衔接说明](https://github.com/TreyDong/banana-reader/blob/main/docs/plugin-id-migration.md)。不要同时启用两个 ID，也不要用较旧记录覆盖当前阅读数据。
+
+## 历史说明（已被正式仓库文档取代）
 
 版本 **0.13.3**。插件 ID、安装目录及新导出笔记链接统一为 `banana-reader`；受保护地复制旧配置、划线和批注，兼容旧笔记回跳。支持简体中文、English 和跟随 Obsidian。
 
