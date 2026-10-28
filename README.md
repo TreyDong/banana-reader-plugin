@@ -1,4 +1,12 @@
-# Banana Reader
+# Banana Reader — archived historical repository
+
+> **Archived on 2026-10-28.** Development and supported releases continue at [TreyDong/banana-reader](https://github.com/TreyDong/banana-reader). The current desktop release is [0.14.8](https://github.com/TreyDong/banana-reader/releases/tag/0.14.8), using the community plugin ID `gloss-reader`.
+>
+> This repository and its `banana-reader` ID releases are retained for history. The old mobile/BRAT beta channel is retired and has not received the 0.14.8 review and PDF fixes. Historical 0.14.1/0.14.2 tags still reference 0.13.3 source and do not reproduce their uploaded installation assets. No tags or release files have been rewritten.
+>
+> If you already use `banana-reader`, preserve its data and read the maintained [identity and data cutover guide](https://github.com/TreyDong/banana-reader/blob/main/docs/plugin-id-migration.md) before switching. Do not enable both identities or overwrite newer reading records.
+
+## Historical documentation (superseded)
 
 Version **0.13.3** uses the plugin ID `banana-reader`, preserves legacy reading data through a guarded copy, and keeps existing exported-note links working. English, Simplified Chinese and following Obsidian are supported.
 
