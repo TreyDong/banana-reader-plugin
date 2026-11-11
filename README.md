@@ -1,10 +1,10 @@
 # Banana Reader — archived historical repository
 
-> **Archived on 2026-10-28.** Development and supported releases continue at [TreyDong/banana-reader](https://github.com/TreyDong/banana-reader). The current desktop release is [0.14.8](https://github.com/TreyDong/banana-reader/releases/tag/0.14.8), using the community plugin ID `gloss-reader`.
+> **Archived.** Development and supported releases continue at [TreyDong/banana-reader](https://github.com/TreyDong/banana-reader). The current desktop release is [0.14.8](https://github.com/TreyDong/banana-reader/releases/tag/0.14.8), using the community plugin ID `gloss-reader`.
 >
 > This repository and its `banana-reader` ID releases are retained for history. The old mobile/BRAT beta channel is retired and has not received the 0.14.8 review and PDF fixes. Historical 0.14.1/0.14.2 tags still reference 0.13.3 source and do not reproduce their uploaded installation assets. No tags or release files have been rewritten.
 >
-> If you already use `banana-reader`, preserve its data and read the maintained [identity and data cutover guide](https://github.com/TreyDong/banana-reader/blob/main/docs/plugin-id-migration.md) before switching. Do not enable both identities or overwrite newer reading records.
+> If you already use `banana-reader`, preserve its data. Do not enable both identities or overwrite newer reading records.
 
 ## Historical documentation (superseded)
 
@@ -63,7 +63,7 @@ The file picker lists vault paths only when opened. Copy buttons **write** the r
 
 For manual installation, copy `main.js`, `manifest.json` and `styles.css` from the same [release](https://github.com/TreyDong/banana-reader-plugin/releases) into `.obsidian/plugins/banana-reader/`. The plugin ID and installation folder are `banana-reader`; a custom vault configuration directory replaces `.obsidian` where applicable. Directory registration is a separate review; use the release files if the new listing is not available yet.
 
-If you installed an earlier release under `gloss-reader`, back up its plugin folder and **disable the old plugin before enabling the new installation**. Do not uninstall it first: Obsidian may remove its stored data. On first load, Banana Reader copies the old settings, highlights, annotations, conversations and recognized indexes without replacing existing destination data. It retains the originals and a migration receipt. If migration reports a conflict, stop and reconcile both copies; do not delete either copy to force an import. This is a replacement installation, not an automatic in-place ID update, and no parallel legacy release will be maintained. Reassign custom hotkeys to the new plugin's commands. Existing secret-reference names and old exported-note links are retained; session-only keys must be entered again. See [migration and recovery](docs/plugin-id-migration.md).
+If you installed an earlier release under `gloss-reader`, back up its plugin folder and **disable the old plugin before enabling the new installation**. Do not uninstall it first: Obsidian may remove its stored data. On first load, Banana Reader copies the old settings, highlights, annotations, conversations and recognized indexes without replacing existing destination data. It retains the originals and a migration receipt. If migration reports a conflict, stop and reconcile both copies; do not delete either copy to force an import. This is a replacement installation, not an automatic in-place ID update, and no parallel legacy release will be maintained. Reassign custom hotkeys to the new plugin's commands. Existing secret-reference names and old exported-note links are retained; session-only keys must be entered again.
 
 ## Development and credits
 
@@ -75,24 +75,24 @@ Current project code: [MIT](LICENSE). Newsreader and Schibsted Grotesk fonts: SI
 
 ## Repository changes
 
-- 2026-10-22: Move active publication to `TreyDong/banana-reader-plugin`. The former directory entry is archived but keeps its repository binding, so the previous repository is retained for history. Plugin ID, version and runtime data remain unchanged.
+- Move active publication to `TreyDong/banana-reader-plugin`. The former directory entry is archived but keeps its repository binding, so the previous repository is retained for history. Plugin ID, version and runtime data remain unchanged.
 
-- 2026-10-22 · 0.13.3: Unify the manifest, installation folder and new exported-note links under `banana-reader`. Retain old note-link handling and copy legacy data without overwriting either copy. Retire the old directory entry during replacement; keep historical release files available.
+- 0.13.3: Unify the manifest, installation folder and new exported-note links under `banana-reader`. Retain old note-link handling and copy legacy data without overwriting either copy. Retire the old directory entry during replacement; keep historical release files available.
 
-- 2026-10-21 · 0.13.2: Replace 10 static style assignments and seven manual settings headings reported by the community scan, preserving existing values, dynamic layout and saved data. Add pinned official ESLint checks and a release-check command.
+- 0.13.2: Replace 10 static style assignments and seven manual settings headings reported by the community scan, preserving existing values, dynamic layout and saved data. Add pinned official ESLint checks and a release-check command.
 
-- 2026-10-20 · 0.13.1: Release immediate language switching for open readers, dynamic labels and accessibility captions; clean up English documentation. Validation covers 124 regression tests, TypeScript checking, the bundled build and native English/Chinese/English switching with marks and an unsent draft retained.
+- 0.13.1: Release immediate language switching for open readers, dynamic labels and accessibility captions; clean up English documentation. Validation covers 124 regression tests, TypeScript checking, the bundled build and native English/Chinese/English switching with marks and an unsent draft retained.
 
-- 2026-10-20 · 0.13.0: Release English/Simplified Chinese interface settings and update both user guides, developer documentation and version metadata. Validation covers 120 regression tests, TypeScript checking and the bundled build. Plugin ID and data paths remain unchanged.
+- 0.13.0: Release English/Simplified Chinese interface settings and update both user guides, developer documentation and version metadata. Validation covers 120 regression tests, TypeScript checking and the bundled build. Plugin ID and data paths remain unchanged.
 
-- 2026-10-20: Move unchanged runtime TypeScript into `src/`, tests into `tests/`, and the build script into `scripts/`. Group developer documentation by purpose. Update build/test paths and add an explicit TypeScript configuration. Version 0.12.5, plugin ID, installation outputs and data paths stay unchanged.
+- Move unchanged runtime TypeScript into `src/`, tests into `tests/`, and the build script into `scripts/`. Group developer documentation by purpose. Update build/test paths and add an explicit TypeScript configuration. Version 0.12.5, plugin ID, installation outputs and data paths stay unchanged.
 
-- 2026-10-20: Remove internal engineering and QA records from the repository and prepare the 0.12.5 release. Keep third-party notices and installation/data paths unchanged.
+- Remove internal engineering and QA records from the repository and prepare the 0.12.5 release. Keep third-party notices and installation/data paths unchanged.
 
-- 2026-10-20: Add a persisted UI-language choice (follow Obsidian, Simplified Chinese, English), localize settings and reader controls, and preserve existing prompts, model routes and saved documents. Settings and existing readers update immediately.
+- Add a persisted UI-language choice (follow Obsidian, Simplified Chinese, English), localize settings and reader controls, and preserve existing prompts, model routes and saved documents. Settings and existing readers update immediately.
 
-- 2026-10-20: Refresh existing reader labels immediately when the interface language changes, including Notebook, Q&A and Marks. Remove mixed-language prose from the English guide.
+- Refresh existing reader labels immediately when the interface language changes, including Notebook, Q&A and Marks. Remove mixed-language prose from the English guide.
 
-- 2026-10-20: Refresh reading statistics, index labels and progress tooltips on language changes, and remove orphaned accessibility captions. Validate English/Chinese/English switching in one open reader through BRAT, retaining marks and an unsent draft; 124 regression tests pass.
+- Refresh reading statistics, index labels and progress tooltips on language changes, and remove orphaned accessibility captions. Validate English/Chinese/English switching in one open reader through BRAT, retaining marks and an unsent draft; 124 regression tests pass.
 
-- 2026-10-22: Prepare the guarded legacy-data copy on an isolated branch before the identity cutover; see [migration and recovery](docs/plugin-id-migration.md).
+- Prepare the guarded legacy-data copy on an isolated branch before the identity cutover.

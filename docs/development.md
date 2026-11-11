@@ -51,4 +51,4 @@ Publish only `main.js`, `manifest.json` and `styles.css` as installation assets,
 
 ## Plugin identity replacement
 
-Use a new `banana-reader` directory entry and retire the old `gloss-reader` listing rather than maintain parallel release channels. The package is based on 0.13.2 plus the isolated migration work; unrelated 0.14.0 work is excluded. Internal view types and historical source attributions remain unchanged. Both new and legacy note protocols resolve through the same handler. See [migration, directory cutover and recovery](plugin-id-migration.md). Do not rename active installations or rewrite vault-wide settings during development.
+Use a new `banana-reader` directory entry and retire the old `gloss-reader` listing rather than maintain parallel release channels. The package is based on 0.13.2 plus the isolated migration work; unrelated 0.14.0 work is excluded. Internal view types and historical source attributions remain unchanged. Both new and legacy note protocols resolve through the same handler. Do not rename active installations or rewrite vault-wide settings during development.
